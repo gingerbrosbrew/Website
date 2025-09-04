@@ -14,18 +14,19 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { token, amount, currency, items } = req.body;
+        const { token, source, amount, currency, items } = req.body;
 
         // Basic validation
-        if (!token || !amount || !currency) {
-            return res.status(400).json({ message: 'Missing required fields: token, amount, or currency.' });
+       if ((!token && !source) || !amount || !currency) {
+            return res.status(400).json({ message: 'Missing required fields: (token or source), amount, or currency.' });
         }
 
         // Create a charge with Omise
         const charge = await omise.charges.create({
             amount: amount, // e.g., 100000 for 1000.00 THB
             currency: currency, // e.g., 'thb'
-            card: token, // The token from the client-side
+            card: token, // The token from a card payment
+            source: source, // The source from QR/Mobile Banking
             description: 'Order from Ginger Bros Website',
             metadata: {
                 cart: JSON.stringify(items)
