@@ -88,7 +88,10 @@
     </div>
 
     <script type="module">
-        Omise.setPublicKey('YOUR_PUBLIC_KEY');
+        // IMPORTANT: Replace this with your actual Omise Public Key.
+        // It's safe to have this in the browser.
+        // For Vercel, it's best to get this from an environment variable.
+        Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY || 'pkey_test_64vym5brctfmko3thct');
 
         const orderSummary = document.getElementById('order-summary');
         const orderTotal = document.getElementById('order-total');
@@ -97,6 +100,7 @@
         const creditCardForm = document.getElementById('credit-card-form');
         const qrCodeButton = document.getElementById('qr-code-button');
         const mobileBankingButton = document.getElementById('mobile-banking-button');
+        const creditCardButton = document.getElementById('credit-card-button');
         const qrCodeContainer = document.getElementById('qr-code-container');
 
         let totalAmount = 0;
@@ -121,44 +125,128 @@
         // Credit Card
         creditCardForm.innerHTML = `
             <div class="form-row">
-                <label for="card-element">Credit or debit card</label>
-                <div id="card-element"></div>
-                <div id="card-errors" role="alert"></div>
+                <div id="card-element" class="p-3 border rounded-md bg-white">
+                    <!-- Omise's card form will be injected here -->
+                </div>
+                <div id="card-errors" role="alert" class="text-red-500 text-sm mt-2"></div>
             </div>
         `;
-
-        const card = Omise.createCardForm(creditCardForm, {
-            onCreateToken: function(token) {
-                console.log(token);
-                // Here you would send the token to your server to create a charge
-                // For now, we'll just simulate a success message
-                alert('Payment successful with credit card!');
-            }
+        
+        // This is the missing piece: Configure and mount the Omise card element.
+        // This will render the card number, expiration, and CVC fields.
+        Omise.card.configure({
+            element: document.getElementById('card-element'),
         });
+        Omise.card.mount();
+
+        // This function handles the token creation and sends it to our serverless function
+        const handleCreditCardPayment = (token) => {
+            creditCardButton.disabled = true;
+            creditCardButton.textContent = 'Processing...';
+
+            fetch('/api/charge', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    token: token,
+                    amount: totalAmount,
+                    currency: 'thb', // Change to your desired currency
+                    items: cart
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'successful' || data.status === 'pending') {
+                    alert('Payment successful!');
+                    localStorage.removeItem('cart'); // Clear the cart
+                    window.location.href = '/'; // Redirect to home page
+                } else {
+                    throw new Error(data.message || 'Payment failed.');
+                }
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert(`Payment failed: ${error.message}`);
+                creditCardButton.disabled = false;
+                creditCardButton.textContent = 'Pay with Credit Card';
+            });
+        };
 
         checkoutForm.addEventListener('submit', function(event) {
             event.preventDefault();
-            card.submit();
+            // Trigger Omise.js to create a token.
+            // The token is then passed to our handler function.
+            Omise.createToken('card', checkoutForm, function(statusCode, response) {
+                if (statusCode === 200) {
+                    // Success: send token to our server
+                    handleCreditCardPayment(response.id);
+                } else {
+                    // Error: display an error message
+                    const errorContainer = document.getElementById('card-errors');
+                    errorContainer.textContent = response.message || 'An unexpected error occurred.';
+                }
+            });
         });
 
         // QR Code
         qrCodeButton.addEventListener('click', async () => {
-            // In a real application, you would create a source with Omise.js
-            // and then use the source ID to create a charge on your server.
-            // For this example, we'll just show a dummy QR code.
-            qrCodeContainer.innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.omise.co" alt="QR Code">';
-            qrCodeContainer.classList.remove('hidden');
-            alert('Scan the QR code to complete the payment.');
+            qrCodeButton.disabled = true;
+            qrCodeButton.textContent = 'Generating QR Code...';
+
+            // Create a source for PromptPay (QR Code)
+            Omise.createSource('promptpay', {
+                amount: totalAmount,
+                currency: 'thb'
+            }, function(statusCode, response) {
+                if (statusCode === 200) {
+                    // On success, create a charge on the server with the source ID
+                    createChargeFromSource(response.id, response.charge_status);
+                    // Display the QR code image for the user to scan
+                    qrCodeContainer.innerHTML = `<img src="${response.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto">`;
+                    qrCodeContainer.classList.remove('hidden');
+                } else {
+                    alert('Failed to generate QR Code: ' + response.message);
+                    qrCodeButton.disabled = false;
+                    qrCodeButton.textContent = 'Pay with QR Code';
+                }
+            });
         });
 
         // Mobile Banking
         mobileBankingButton.addEventListener('click', async () => {
-            // In a real application, you would create a source with Omise.js
-            // and then use the source ID to create a charge on your server.
-            // This would typically redirect the user to their mobile banking app.
-            alert('Redirecting to your mobile banking app...');
+            // For mobile banking, we create a source and redirect the user.
+            // Omise will handle redirecting them back to your site.
+            Omise.createSource('mobile_banking_scb', { // Example: SCB. Change as needed.
+                amount: totalAmount,
+                currency: 'thb',
+                return_uri: window.location.href // The URL to return to after payment
+            }, function(statusCode, response) {
+                if (statusCode === 200) {
+                    // Redirect the user to the authorization URL
+                    window.location.href = response.authorize_uri;
+                } else {
+                    alert('Failed to initiate mobile banking payment: ' + response.message);
+                }
+            });
         });
 
+        // A helper function to create a charge from a source (like QR or Mobile Banking)
+        function createChargeFromSource(sourceId, chargeStatus) {
+            // We don't need to do anything if the charge is already successful
+            if (chargeStatus === 'successful') return;
+
+            fetch('/api/charge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source: sourceId, // Use 'source' instead of 'token'
+                    amount: totalAmount,
+                    currency: 'thb'
+                })
+            }).then(res => res.json()).then(data => console.log('Charge result:', data));
+        }
     </script>
 
 </body>

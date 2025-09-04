@@ -1,0 +1,8 @@
+{
+  "name": "ginger-bros-website",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "omise": "^0.8.6"
+  }
+}
