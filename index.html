@@ -81,11 +81,11 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script type="module">
+            <script type="module">
         // Import functions from the Firebase SDKs
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // IMPORTANT: Replace this with your actual Firebase config from your project settings.
         // Go to your Firebase project -> Project Settings (gear icon) -> General tab.
@@ -166,42 +166,45 @@
             loadingIndicator.style.display = 'none';
             configErrorMessage.classList.remove('hidden');
         } else {
-            // Initialize Firebase
-            const app = initializeApp(firebaseConfig);
-            const auth = getAuth(app);
-            const db = getFirestore(app);
+            try {
+                // Initialize Firebase
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
 
-            // --- Authentication ---
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    console.log("User is signed in:", user.uid);
-                    fetchProducts(db); // Pass db instance
-                } else {
-                    console.log("User is not signed in. Attempting to sign in anonymously...");
-                    signInAnonymously(auth).catch((error) => {
-                        console.error("Anonymous sign-in failed: ", error);
-                        showError("Authentication failed. Please check your Firebase configuration and rules.");
-                        showError("Authentication failed.  Check that anonymous authentication is enabled in Firebase and your configuration is correct.");
-                    });
-                }
-            });
+                // --- Authentication ---
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        console.log("User is signed in:", user.uid);
+                        fetchProducts(db); // Pass db instance
+                    } else {
+                        console.log("User is not signed in. Attempting to sign in anonymously...");
+                        signInAnonymously(auth).catch((error) => {
+                            console.error("Anonymous sign-in failed: ", error);
+                            showError("Authentication failed. Please check your Firebase configuration and rules.");
+                        });
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization failed: ", error);
+                showError("Could not connect to Firebase. Please check your configuration.");
+            }
         }
 
         // --- Firestore Data Fetching ---
-        function fetchProducts(db) {
-            // As per your screenshot, the collection is named 'products'
-            const productsCollection = collection(db, 'products');
-            const q = query(productsCollection);
+        async function fetchProducts(db) {
+            try {
+                const productsCollection = collection(db, 'products');
+                const q = query(productsCollection);
+                const querySnapshot = await getDocs(q);
 
-            // Use onSnapshot for real-time updates
-            onSnapshot(q, (querySnapshot) => {
                 loadingIndicator.style.display = 'none';
                 errorMessage.classList.add('hidden');
                 productGrid.innerHTML = '';
 
                 if (querySnapshot.empty) {
-                     productGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">No products found in the database.</p>`;
-                     return;
+                    productGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">No products found in the database.</p>`;
+                    return;
                 }
 
                 querySnapshot.forEach((doc) => {
@@ -209,10 +212,10 @@
                     const productId = doc.id;
                     createProductCard(product, productId);
                 });
-            }, (error) => {
+            } catch (error) {
                 console.error("Error fetching products: ", error);
                 showError("Error fetching data. Check Firestore security rules and collection name.");
-            });
+            }
         }
         
         // --- UI Rendering ---
