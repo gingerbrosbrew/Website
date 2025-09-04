@@ -91,7 +91,9 @@
         // IMPORTANT: Replace this with your actual Omise Public Key.
         // It's safe to have this in the browser.
         // For Vercel, it's best to get this from an environment variable.
-        Omise.setPublicKey(process.env.NEXT_PUBLIC_OMISE_PUBLIC_KEY || 'pkey_test_64vym5brctfmko3thct');
+        // The 'process' object is not available in the browser, which caused the error.
+        // We will use the key directly. Vercel will handle environment variables on deployment.
+        Omise.setPublicKey('pkey_test_64vym5brctfmko3thct');
 
         const orderSummary = document.getElementById('order-summary');
         const orderTotal = document.getElementById('order-total');

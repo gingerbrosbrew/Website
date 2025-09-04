@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "omise": "^0.8.6"
+    "omise": "^1.0.0"
   }
 }
