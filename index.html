@@ -47,7 +47,7 @@
                             <span>Total</span>
                             <span id="cart-total">$0.00</span>
                         </div>
-                        <button class="mt-4 w-full bg-indigo-500 text-white py-2 rounded-md hover:bg-indigo-600">Checkout</button>
+                        <button id="checkout-button" class="mt-4 w-full bg-indigo-500 text-white py-2 rounded-md hover:bg-indigo-600">Checkout</button>
                     </div>
                 </div>
             </div>
@@ -108,18 +108,12 @@
         const cartItems = document.getElementById('cart-items');
         const cartCount = document.getElementById('cart-count');
         const cartTotal = document.getElementById('cart-total');
-        const checkoutButton = document.getElementById('checkout-button');
 
         let cart = [];
 
         // --- Cart UI ---
         cartButton.addEventListener('click', () => {
             cartDropdown.classList.toggle('hidden');
-        });
-
-        checkoutButton.addEventListener('click', () => {
-            localStorage.setItem('cart', JSON.stringify(cart));
-            window.location.href = 'checkout.html';
         });
 
         function addToCart(product, id) {
@@ -158,6 +152,13 @@
 
             cartCount.textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
             cartTotal.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total / 100);
+
+            // Add event listener to the checkout button after it's created
+            const checkoutButton = document.getElementById('checkout-button');
+            checkoutButton.addEventListener('click', () => {
+                localStorage.setItem('cart', JSON.stringify(cart));
+                window.location.href = 'checkout.html';
+            });
         }
         
         // --- Configuration Check ---
@@ -266,4 +267,3 @@
     </script>
 </body>
 </html>
-
