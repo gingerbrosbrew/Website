@@ -105,12 +105,18 @@
         const cartItems = document.getElementById('cart-items');
         const cartCount = document.getElementById('cart-count');
         const cartTotal = document.getElementById('cart-total');
+        const checkoutButton = document.getElementById('checkout-button');
 
         let cart = [];
 
         // --- Cart UI ---
         cartButton.addEventListener('click', () => {
             cartDropdown.classList.toggle('hidden');
+        });
+
+        checkoutButton.addEventListener('click', () => {
+            localStorage.setItem('cart', JSON.stringify(cart));
+            window.location.href = 'checkout.html';
         });
 
         function addToCart(product, id) {

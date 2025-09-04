@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Omise.js -->
+    <script src="https://cdn.omise.co/omise.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-gray-800">Checkout</h1>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Shipping Information -->
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Shipping Information</h2>
+                <form id="shipping-form">
+                    <div class="mb-4">
+                        <label for="name" class="block text-gray-700 font-bold mb-2">Full Name</label>
+                        <input type="text" id="name" name="name" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="email" class="block text-gray-700 font-bold mb-2">Email</label>
+                        <input type="email" id="email" name="email" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="phone" class="block text-gray-700 font-bold mb-2">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="address" class="block text-gray-700 font-bold mb-2">Address</label>
+                        <input type="text" id="address" name="address" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="city" class="block text-gray-700 font-bold mb-2">City</label>
+                        <input type="text" id="city" name="city" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="zip" class="block text-gray-700 font-bold mb-2">ZIP Code</label>
+                        <input type="text" id="zip" name="zip" class="w-full px-3 py-2 border rounded-md" required>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Payment Information -->
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Payment</h2>
+                <div id="payment-methods">
+                    <form id="checkout-form">
+                        <div id="credit-card-form" class="mb-4"></div>
+                        <button type="submit" id="credit-card-button" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">Pay with Credit Card</button>
+                    </form>
+                    <div class="mt-4">
+                        <button id="qr-code-button" class="w-full bg-gray-800 text-white py-2 rounded-md hover:bg-gray-900">Pay with QR Code</button>
+                    </div>
+                    <div class="mt-4">
+                        <button id="mobile-banking-button" class="w-full bg-green-500 text-white py-2 rounded-md hover:bg-green-600">Pay with Mobile Banking</button>
+                    </div>
+                    <div id="qr-code-container" class="hidden mt-4"></div>
+                </div>
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Order Summary</h3>
+                    <div id="order-summary" class="bg-white p-4 rounded-md shadow-md">
+                        <!-- Order summary will be populated by JavaScript -->
+                    </div>
+                    <div class="flex justify-between font-bold mt-4">
+                        <span>Total</span>
+                        <span id="order-total">$0.00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        Omise.setPublicKey('YOUR_PUBLIC_KEY');
+
+        const orderSummary = document.getElementById('order-summary');
+        const orderTotal = document.getElementById('order-total');
+        const cart = JSON.parse(localStorage.getItem('cart'));
+        const checkoutForm = document.getElementById('checkout-form');
+        const creditCardForm = document.getElementById('credit-card-form');
+        const qrCodeButton = document.getElementById('qr-code-button');
+        const mobileBankingButton = document.getElementById('mobile-banking-button');
+        const qrCodeContainer = document.getElementById('qr-code-container');
+
+        let totalAmount = 0;
+
+        if (cart && cart.length > 0) {
+            orderSummary.innerHTML = '';
+            cart.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'flex justify-between mb-2';
+                itemElement.innerHTML = `
+                    <span>${item.name} (x${item.quantity})</span>
+                    <span>${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(item.price / 100 * item.quantity)}</span>
+                `;
+                orderSummary.appendChild(itemElement);
+                totalAmount += item.price * item.quantity;
+            });
+            orderTotal.textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalAmount / 100);
+        } else {
+            orderSummary.innerHTML = '<p>Your cart is empty.</p>';
+        }
+
+        // Credit Card
+        creditCardForm.innerHTML = `
+            <div class="form-row">
+                <label for="card-element">Credit or debit card</label>
+                <div id="card-element"></div>
+                <div id="card-errors" role="alert"></div>
+            </div>
+        `;
+
+        const card = Omise.createCardForm(creditCardForm, {
+            onCreateToken: function(token) {
+                console.log(token);
+                // Here you would send the token to your server to create a charge
+                // For now, we'll just simulate a success message
+                alert('Payment successful with credit card!');
+            }
+        });
+
+        checkoutForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            card.submit();
+        });
+
+        // QR Code
+        qrCodeButton.addEventListener('click', async () => {
+            // In a real application, you would create a source with Omise.js
+            // and then use the source ID to create a charge on your server.
+            // For this example, we'll just show a dummy QR code.
+            qrCodeContainer.innerHTML = '<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.omise.co" alt="QR Code">';
+            qrCodeContainer.classList.remove('hidden');
+            alert('Scan the QR code to complete the payment.');
+        });
+
+        // Mobile Banking
+        mobileBankingButton.addEventListener('click', async () => {
+            // In a real application, you would create a source with Omise.js
+            // and then use the source ID to create a charge on your server.
+            // This would typically redirect the user to their mobile banking app.
+            alert('Redirecting to your mobile banking app...');
+        });
+
+    </script>
+
+</body>
+</html>
