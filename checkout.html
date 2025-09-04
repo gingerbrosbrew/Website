@@ -196,24 +196,46 @@
         qrCodeButton.addEventListener('click', async () => {
             qrCodeButton.disabled = true;
             qrCodeButton.textContent = 'Generating QR Code...';
+            qrCodeContainer.innerHTML = ''; // Clear previous QR code
+            qrCodeContainer.classList.add('hidden');
 
-            // Create a source for PromptPay (QR Code)
-            Omise.createSource('promptpay', {
-                amount: totalAmount,
-                currency: 'thb'
-            }, function(statusCode, response) {
-                if (statusCode === 200) {
-                    // On success, create a charge on the server with the source ID
-                    createChargeFromSource(response.id, response.charge_status);
-                    // Display the QR code image for the user to scan
-                    qrCodeContainer.innerHTML = `<img src="${response.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto">`;
-                    qrCodeContainer.classList.remove('hidden');
-                } else {
-                    alert('Failed to generate QR Code: ' + response.message);
-                    qrCodeButton.disabled = false;
-                    qrCodeButton.textContent = 'Pay with QR Code';
+            try {
+                // Step 1: Create a source for PromptPay (QR Code) on the server.
+                // This is more secure and reliable.
+                const sourceResponse = await fetch('/api/create-source', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'promptpay',
+                        amount: totalAmount,
+                        currency: 'thb'
+                    })
+                });
+
+                const sourceData = await sourceResponse.json();
+
+                if (!sourceResponse.ok) {
+                    throw new Error(sourceData.message || 'Failed to create payment source.');
                 }
-            });
+
+                // Step 2: If source is created, display the QR code image for the user to scan.
+                qrCodeContainer.innerHTML = `<div class="text-center">
+                    <p class="mb-2">Scan the QR code with your banking app to pay.</p>
+                    <img src="${sourceData.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto border">
+                    <p class="mt-2 text-sm text-gray-500">Waiting for payment...</p>
+                </div>`;
+                qrCodeContainer.classList.remove('hidden');
+                qrCodeButton.textContent = 'QR Code Generated';
+
+                // Now the charge is pending in your Omise dashboard.
+                // Omise will notify you via webhooks when the payment is complete.
+
+            } catch (error) {
+                console.error('QR Code Error:', error);
+                alert('Failed to generate QR Code: ' + error.message);
+                qrCodeButton.disabled = false;
+                qrCodeButton.textContent = 'Pay with QR Code';
+            }
         });
 
         // Mobile Banking
@@ -233,22 +255,6 @@
                 }
             });
         });
-
-        // A helper function to create a charge from a source (like QR or Mobile Banking)
-        function createChargeFromSource(sourceId, chargeStatus) {
-            // We don't need to do anything if the charge is already successful
-            if (chargeStatus === 'successful') return;
-
-            fetch('/api/charge', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    source: sourceId, // Use 'source' instead of 'token'
-                    amount: totalAmount,
-                    currency: 'thb'
-                })
-            }).then(res => res.json()).then(data => console.log('Charge result:', data));
-        }
     </script>
 
 </body>
