@@ -194,45 +194,53 @@
 
         // QR Code
         qrCodeButton.addEventListener('click', async () => {
+            console.log('QR Code button clicked.');
             qrCodeButton.disabled = true;
             qrCodeButton.textContent = 'Generating QR Code...';
             qrCodeContainer.innerHTML = ''; // Clear previous QR code
             qrCodeContainer.classList.add('hidden');
 
             try {
-                // Step 1: Create a source for PromptPay (QR Code) on the server.
-                // This is more secure and reliable.
+                console.log('Attempting to fetch /api/create-source with amount:', totalAmount);
+                const requestBody = {
+                    type: 'promptpay',
+                    amount: totalAmount,
+                    currency: 'thb'
+                };
+
                 const sourceResponse = await fetch('/api/create-source', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'promptpay',
-                        amount: totalAmount,
-                        currency: 'thb'
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
-                const sourceData = await sourceResponse.json();
+                console.log('Received response from server with status:', sourceResponse.status);
 
+                // Check if the response is OK (status in the range 200-299)
                 if (!sourceResponse.ok) {
-                    throw new Error(sourceData.message || 'Failed to create payment source.');
+                    // Try to get error message from server, then throw
+                    const errorData = await sourceResponse.json().catch(() => ({ message: 'Server returned a non-JSON error.' }));
+                    throw new Error(errorData.message || `Server responded with status ${sourceResponse.status}`);
                 }
 
-                // Step 2: If source is created, display the QR code image for the user to scan.
+                const sourceData = await sourceResponse.json();
+                console.log('Successfully parsed JSON response:', sourceData);
+
+                // Display the QR code image for the user to scan.
                 qrCodeContainer.innerHTML = `<div class="text-center">
                     <p class="mb-2">Scan the QR code with your banking app to pay.</p>
                     <img src="${sourceData.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto border">
                     <p class="mt-2 text-sm text-gray-500">Waiting for payment...</p>
                 </div>`;
                 qrCodeContainer.classList.remove('hidden');
-                qrCodeButton.textContent = 'QR Code Generated';
+                qrCodeButton.textContent = 'QR Code Generated - Scan to Pay';
 
-                // Now the charge is pending in your Omise dashboard.
-                // Omise will notify you via webhooks when the payment is complete.
+                console.log('QR Code displayed. Charge should be pending in Omise dashboard.');
 
             } catch (error) {
-                console.error('QR Code Error:', error);
-                alert('Failed to generate QR Code: ' + error.message);
+                // This will catch fetch errors, network errors, and errors we threw manually.
+                console.error('An error occurred in the QR Code process:', error);
+                alert('Could not generate QR Code. ' + error.message + ' (See console for details)');
                 qrCodeButton.disabled = false;
                 qrCodeButton.textContent = 'Pay with QR Code';
             }
