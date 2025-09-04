@@ -53,27 +53,30 @@
             </div>
         </header>
 
+        <!-- Loading indicator -->
+        <div id="loading-indicator" class="text-center py-12">
+            <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-gray-600">Loading products from Firebase...</p>
+        </div>
+
+        <!-- Error message container -->
+        <div id="error-message" class="hidden text-center py-12 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-red-700 font-semibold">Could not fetch products.</p>
+            <p class="text-red-600 mt-2">Please check your Firebase configuration and security rules.</p>
+        </div>
+
+        <!-- Config Error Message -->
+        <div id="config-error-message" class="hidden text-center py-12 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h3 class="text-xl font-bold text-yellow-800">Configuration Needed!</h3>
+            <p class="text-yellow-700 font-semibold mt-2">Your Firebase configuration is missing.</p>
+            <p class="text-yellow-600 mt-2 px-4">Please open this <code>index.html</code> file and paste your project's Firebase config credentials into the <code>firebaseConfig</code> object in the script section.</p>
+        </div>
+
         <!-- Product grid will be populated by JavaScript -->
         <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            <!-- Loading indicator -->
-            <div id="loading-indicator" class="col-span-full text-center py-12">
-                 <svg class="animate-spin h-8 w-8 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <p class="mt-4 text-gray-600">Loading products from Firebase...</p>
-            </div>
-             <!-- Error message container -->
-            <div id="error-message" class="hidden col-span-full text-center py-12 bg-red-50 border border-red-200 rounded-lg">
-                <p class="text-red-700 font-semibold">Could not fetch products.</p>
-                <p class="text-red-600 mt-2">Please check your Firebase configuration and security rules.</p>
-            </div>
-            <!-- Config Error Message -->
-            <div id="config-error-message" class="hidden col-span-full text-center py-12 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <h3 class="text-xl font-bold text-yellow-800">Configuration Needed!</h3>
-                <p class="text-yellow-700 font-semibold mt-2">Your Firebase configuration is missing.</p>
-                <p class="text-yellow-600 mt-2 px-4">Please open this <code>index.html</code> file and paste your project's Firebase config credentials into the <code>firebaseConfig</code> object in the script section.</p>
-            </div>
         </div>
     </div>
 
@@ -194,15 +197,10 @@
             onSnapshot(q, (querySnapshot) => {
                 loadingIndicator.style.display = 'none';
                 errorMessage.classList.add('hidden');
-                
-                // Clear previous product listings, but keep indicators
-                const currentIndicators = productGrid.querySelectorAll('#loading-indicator, #error-message, #config-error-message');
                 productGrid.innerHTML = '';
-                currentIndicators.forEach(el => productGrid.appendChild(el));
-
 
                 if (querySnapshot.empty) {
-                     productGrid.innerHTML += `<p class="col-span-full text-center text-gray-500">No products found in the database.</p>`;
+                     productGrid.innerHTML = `<p class="col-span-full text-center text-gray-500">No products found in the database.</p>`;
                      return;
                 }
 
@@ -259,7 +257,6 @@
             errorMessage.classList.remove('hidden');
             if (message) {
                 errorMessage.querySelector('p').textContent = message;
-                errorMessage.querySelector('p:nth-child(1)').textContent = message; // Target the first <p> for the error message
             }
         }
 
