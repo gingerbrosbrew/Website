@@ -82,201 +82,205 @@
     </div>
 
     <script type="module">
-        try {
-            console.log('Checkout script started.');
+        // **FIX**: Wrap all code in a DOMContentLoaded event listener
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                console.log('Checkout script started.');
 
-            // IMPORTANT: Replace this with your actual Omise Public Key from Vercel environment variables.
-            Omise.setPublicKey('pkey_test_64vym5brctfmko3thct');
+                // IMPORTANT: Replace this with your actual Omise Public Key from Vercel environment variables.
+                Omise.setPublicKey('pkey_test_64vym5brctfmko3thct');
 
-            const orderSummary = document.getElementById('order-summary');
-            const orderTotal = document.getElementById('order-total');
-            const cart = JSON.parse(localStorage.getItem('cart'));
-            const checkoutForm = document.getElementById('checkout-form');
-            const creditCardForm = document.getElementById('credit-card-form');
-            const qrCodeButton = document.getElementById('qr-code-button');
-            const mobileBankingButton = document.getElementById('mobile-banking-button');
-            const creditCardButton = document.getElementById('credit-card-button');
-            const qrCodeContainer = document.getElementById('qr-code-container');
+                const orderSummary = document.getElementById('order-summary');
+                const orderTotal = document.getElementById('order-total');
+                const cart = JSON.parse(localStorage.getItem('cart'));
+                const checkoutForm = document.getElementById('checkout-form');
+                const creditCardForm = document.getElementById('credit-card-form');
+                const qrCodeButton = document.getElementById('qr-code-button');
+                const mobileBankingButton = document.getElementById('mobile-banking-button');
+                const creditCardButton = document.getElementById('credit-card-button');
+                const qrCodeContainer = document.getElementById('qr-code-container');
 
-            let totalAmount = 0;
+                let totalAmount = 0;
 
-            if (cart && cart.length > 0) {
-                orderSummary.innerHTML = '';
-                cart.forEach(item => {
-                    const itemElement = document.createElement('div');
-                    itemElement.className = 'flex justify-between mb-2';
-                    itemElement.innerHTML = `
-                        <span>${item.name} (x${item.quantity})</span>
-                        <span>${new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(item.price / 100 * item.quantity)}</span>
-                    `;
-                    orderSummary.appendChild(itemElement);
-                    totalAmount += item.price * item.quantity;
+                if (cart && cart.length > 0) {
+                    orderSummary.innerHTML = '';
+                    cart.forEach(item => {
+                        const itemElement = document.createElement('div');
+                        itemElement.className = 'flex justify-between mb-2';
+                        itemElement.innerHTML = `
+                            <span>${item.name} (x${item.quantity})</span>
+                            <span>${new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(item.price / 100 * item.quantity)}</span>
+                        `;
+                        orderSummary.appendChild(itemElement);
+                        totalAmount += item.price * item.quantity;
+                    });
+                    orderTotal.textContent = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(totalAmount / 100);
+                } else {
+                    orderSummary.innerHTML = '<p>Your cart is empty.</p>';
+                    creditCardButton.disabled = true;
+                    qrCodeButton.disabled = true;
+                    mobileBankingButton.disabled = true;
+                }
+
+                // Credit Card
+                creditCardForm.innerHTML = `
+                    <div class="form-row">
+                        <div id="card-element" class="p-3 border rounded-md bg-white">
+                            </div>
+                        <div id="card-errors" role="alert" class="text-red-500 text-sm mt-2"></div>
+                    </div>
+                `;
+                
+                // This will now run correctly
+                Omise.card.configure({
+                    element: document.getElementById('card-element'),
                 });
-                orderTotal.textContent = new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(totalAmount / 100);
-            } else {
-                orderSummary.innerHTML = '<p>Your cart is empty.</p>';
-                creditCardButton.disabled = true;
-                qrCodeButton.disabled = true;
-                mobileBankingButton.disabled = true;
+                Omise.card.mount();
+
+                const handleCreditCardPayment = (token) => {
+                    console.log('Creating credit card charge with token:', token);
+                    creditCardButton.disabled = true;
+                    creditCardButton.textContent = 'Processing...';
+
+                    fetch('/api/charge', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            token: token,
+                            amount: totalAmount,
+                            currency: 'thb',
+                            items: cart
+                        }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Charge response:', data);
+                        if (data.status === 'successful' || data.status === 'pending') {
+                            alert('Payment successful!');
+                            localStorage.removeItem('cart');
+                            window.location.href = '/';
+                        } else {
+                            throw new Error(data.message || 'Payment failed.');
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Credit Card Error:', error);
+                        alert(`Payment failed: ${error.message}`);
+                        creditCardButton.disabled = false;
+                        creditCardButton.textContent = 'Pay with Credit Card';
+                    });
+                };
+
+                checkoutForm.addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    console.log('Checkout form submitted. Creating token...');
+                    Omise.createToken('card', checkoutForm, function(statusCode, response) {
+                        if (statusCode === 200) {
+                            handleCreditCardPayment(response.id);
+                        } else {
+                            console.error('Token creation error:', response);
+                            const errorContainer = document.getElementById('card-errors');
+                            errorContainer.textContent = response.message || 'An unexpected error occurred.';
+                        }
+                    });
+                });
+
+                // QR Code
+                qrCodeButton.addEventListener('click', async () => {
+                    console.log('QR Code button clicked.');
+                    qrCodeButton.disabled = true;
+                    qrCodeButton.textContent = 'Generating QR Code...';
+                    qrCodeContainer.innerHTML = '';
+                    qrCodeContainer.classList.add('hidden');
+
+                    try {
+                        const requestBody = {
+                            type: 'promptpay',
+                            amount: totalAmount,
+                            currency: 'thb'
+                        };
+                        console.log('Creating QR code source with body:', requestBody);
+
+                        const sourceResponse = await fetch('/api/create-source', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestBody)
+                        });
+
+                        if (!sourceResponse.ok) {
+                            const errorData = await sourceResponse.json().catch(() => ({ message: 'Server returned a non-JSON error.' }));
+                            throw new Error(errorData.message || `Server responded with status ${sourceResponse.status}`);
+                        }
+
+                        const sourceData = await sourceResponse.json();
+                        console.log('QR Code source created:', sourceData);
+
+                        qrCodeContainer.innerHTML = `<div class="text-center">
+                            <p class="mb-2">Scan the QR code with your banking app to pay.</p>
+                            <img src="${sourceData.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto border">
+                            <p class="mt-2 text-sm text-gray-500">Waiting for payment...</p>
+                        </div>`;
+                        qrCodeContainer.classList.remove('hidden');
+                        qrCodeButton.textContent = 'QR Code Generated - Scan to Pay';
+
+                    } catch (error) {
+                        console.error('QR Code Error:', error);
+                        alert('Could not generate QR Code. ' + error.message);
+                        qrCodeButton.disabled = false;
+                        qrCodeButton.textContent = 'Pay with QR Code';
+                    }
+                });
+
+                // Mobile Banking
+                mobileBankingButton.addEventListener('click', async () => {
+                    console.log('Mobile Banking button clicked.');
+                    mobileBankingButton.disabled = true;
+                    mobileBankingButton.textContent = 'Processing...';
+
+                    try {
+                        const requestBody = {
+                            type: 'mobile_banking_scb',
+                            amount: totalAmount,
+                            currency: 'thb',
+                            return_uri: window.location.origin + '/payment-success' // Change to your success page
+                        };
+                        console.log('Creating mobile banking source with body:', requestBody);
+
+                        const sourceResponse = await fetch('/api/create-mobile-banking-source', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(requestBody)
+                        });
+
+                        if (!sourceResponse.ok) {
+                            const errorData = await sourceResponse.json().catch(() => ({ message: 'Server returned a non-JSON error.' }));
+                            throw new Error(errorData.message || `Server responded with status ${sourceResponse.status}`);
+                        }
+
+                        const sourceData = await sourceResponse.json();
+                        console.log('Mobile banking source created:', sourceData);
+
+                        if (sourceData.authorize_uri) {
+                            window.location.href = sourceData.authorize_uri;
+                        } else {
+                            throw new Error('Could not get authorization URL.');
+                        }
+
+                    } catch (error) {
+                        console.error('Mobile Banking Error:', error);
+                        alert('Could not initiate mobile banking payment. ' + error.message);
+                        mobileBankingButton.disabled = false;
+                        mobileBankingButton.textContent = 'Pay with Mobile Banking (SCB)';
+                    }
+                });
+
+            } catch (error) {
+                console.error('A critical error occurred in the checkout script:', error);
+                alert('An unexpected error occurred. Please try again later.');
             }
-
-            // Credit Card
-            creditCardForm.innerHTML = `
-                <div class="form-row">
-                    <div id="card-element" class="p-3 border rounded-md bg-white">
-                        </div>
-                    <div id="card-errors" role="alert" class="text-red-500 text-sm mt-2"></div>
-                </div>
-            `;
-            
-            Omise.card.configure({
-                element: document.getElementById('card-element'),
-            });
-            Omise.card.mount();
-
-            const handleCreditCardPayment = (token) => {
-                console.log('Creating credit card charge with token:', token);
-                creditCardButton.disabled = true;
-                creditCardButton.textContent = 'Processing...';
-
-                fetch('/api/charge', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        token: token,
-                        amount: totalAmount,
-                        currency: 'thb',
-                        items: cart
-                    }),
-                })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Charge response:', data);
-                    if (data.status === 'successful' || data.status === 'pending') {
-                        alert('Payment successful!');
-                        localStorage.removeItem('cart');
-                        window.location.href = '/';
-                    } else {
-                        throw new Error(data.message || 'Payment failed.');
-                    }
-                })
-                .catch((error) => {
-                    console.error('Credit Card Error:', error);
-                    alert(`Payment failed: ${error.message}`);
-                    creditCardButton.disabled = false;
-                    creditCardButton.textContent = 'Pay with Credit Card';
-                });
-            };
-
-            checkoutForm.addEventListener('submit', function(event) {
-                event.preventDefault();
-                console.log('Checkout form submitted. Creating token...');
-                Omise.createToken('card', checkoutForm, function(statusCode, response) {
-                    if (statusCode === 200) {
-                        handleCreditCardPayment(response.id);
-                    } else {
-                        console.error('Token creation error:', response);
-                        const errorContainer = document.getElementById('card-errors');
-                        errorContainer.textContent = response.message || 'An unexpected error occurred.';
-                    }
-                });
-            });
-
-            // QR Code
-            qrCodeButton.addEventListener('click', async () => {
-                console.log('QR Code button clicked.');
-                qrCodeButton.disabled = true;
-                qrCodeButton.textContent = 'Generating QR Code...';
-                qrCodeContainer.innerHTML = '';
-                qrCodeContainer.classList.add('hidden');
-
-                try {
-                    const requestBody = {
-                        type: 'promptpay',
-                        amount: totalAmount,
-                        currency: 'thb'
-                    };
-                    console.log('Creating QR code source with body:', requestBody);
-
-                    const sourceResponse = await fetch('/api/create-source', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(requestBody)
-                    });
-
-                    if (!sourceResponse.ok) {
-                        const errorData = await sourceResponse.json().catch(() => ({ message: 'Server returned a non-JSON error.' }));
-                        throw new Error(errorData.message || `Server responded with status ${sourceResponse.status}`);
-                    }
-
-                    const sourceData = await sourceResponse.json();
-                    console.log('QR Code source created:', sourceData);
-
-                    qrCodeContainer.innerHTML = `<div class="text-center">
-                        <p class="mb-2">Scan the QR code with your banking app to pay.</p>
-                        <img src="${sourceData.scannable_code.image.download_uri}" alt="Scan QR Code" class="mx-auto border">
-                        <p class="mt-2 text-sm text-gray-500">Waiting for payment...</p>
-                    </div>`;
-                    qrCodeContainer.classList.remove('hidden');
-                    qrCodeButton.textContent = 'QR Code Generated - Scan to Pay';
-
-                } catch (error) {
-                    console.error('QR Code Error:', error);
-                    alert('Could not generate QR Code. ' + error.message);
-                    qrCodeButton.disabled = false;
-                    qrCodeButton.textContent = 'Pay with QR Code';
-                }
-            });
-
-            // Mobile Banking
-            mobileBankingButton.addEventListener('click', async () => {
-                console.log('Mobile Banking button clicked.');
-                mobileBankingButton.disabled = true;
-                mobileBankingButton.textContent = 'Processing...';
-
-                try {
-                    const requestBody = {
-                        type: 'mobile_banking_scb',
-                        amount: totalAmount,
-                        currency: 'thb',
-                        return_uri: window.location.origin + '/payment-success' // Change to your success page
-                    };
-                    console.log('Creating mobile banking source with body:', requestBody);
-
-                    const sourceResponse = await fetch('/api/create-mobile-banking-source', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(requestBody)
-                    });
-
-                    if (!sourceResponse.ok) {
-                        const errorData = await sourceResponse.json().catch(() => ({ message: 'Server returned a non-JSON error.' }));
-                        throw new Error(errorData.message || `Server responded with status ${sourceResponse.status}`);
-                    }
-
-                    const sourceData = await sourceResponse.json();
-                    console.log('Mobile banking source created:', sourceData);
-
-                    if (sourceData.authorize_uri) {
-                        window.location.href = sourceData.authorize_uri;
-                    } else {
-                        throw new Error('Could not get authorization URL.');
-                    }
-
-                } catch (error) {
-                    console.error('Mobile Banking Error:', error);
-                    alert('Could not initiate mobile banking payment. ' + error.message);
-                    mobileBankingButton.disabled = false;
-                    mobileBankingButton.textContent = 'Pay with Mobile Banking (SCB)';
-                }
-            });
-
-        } catch (error) {
-            console.error('A critical error occurred in the checkout script:', error);
-            alert('An unexpected error occurred. Please try again later.');
-        }
+        });
     </script>
 
 </body>
